@@ -540,7 +540,6 @@ void ARMConstantIslands::addOneCPE(unsigned idx, unsigned size, unsigned align)
 					break;
 				}
 			}
-
 		}
 	}
 }
@@ -550,20 +549,16 @@ void ARMConstantIslands::doMyPlacement()
 {
 	MachineFunction::iterator MFI = MF->end();
 	MachineBasicBlock *MBB = --MFI;
-	//MF->DeleteMachineBasicBlock(MBB);
 	MF->erase(MBB);
 
-
-/*
 	const std::vector<MachineConstantPoolEntry> &CPs = MCP->getConstants();
 	const DataLayout &TD = *MF->getTarget().getDataLayout();
 	for (unsigned i = 0, e = CPs.size(); i != e; ++i) 
 	{
 		unsigned size = TD.getTypeAllocSize(CPs[i].getType());
 		unsigned align = Log2_32(CPs[i].getAlignment());
-		//	addOneCPE(i, size, align);	
+		addOneCPE(i, size, align);	
 	}
-*/
 
 }
 
