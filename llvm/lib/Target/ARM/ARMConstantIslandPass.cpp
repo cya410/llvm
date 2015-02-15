@@ -276,7 +276,9 @@ namespace {
 		private:
 		void doInitialPlacement(std::vector<MachineInstr*> &CPEMIs);
 		/****************************************************/
-		void InsertJump();
+		void insertJump();
+		void doMyPlacement();
+		void addOneCPE(unsigned idx, unsigned size, unsigned align);
 		/****************************************************/
 		bool BBHasFallthrough(MachineBasicBlock *MBB);
 		CPEntry *findConstPoolEntry(unsigned CPI, const MachineInstr *CPEMI);
@@ -502,14 +504,67 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
 	T2JumpTables.clear();
 
 	/*************************************************/
-	InsertJump();
+	insertJump();
+	//doMyPlacement();
 	/*************************************************/
+
+	dbgs() << "end of constant island on function " << MF << "\n";
 
 	return MadeChange;
 }
 
 /********************************************************************************/
-void ARMConstantIslands::InsertJump()
+void ARMConstantIslands::addOneCPE(unsigned idx, unsigned size, unsigned align)
+{
+	for (MachineFunction::iterator MBBI = MF->begin(); MBBI != MF->end(); MBBI++)
+	{
+		bool bb_has_cp_idx = false;
+		for (MachineBasicBlock::iterator I = MBBI->begin(); I != MBBI->end(); I++)
+		{
+			if (bb_has_cp_idx) break;
+
+			if (I->isDebugValue()) continue;
+
+			for (unsigned op = 0; op != I->getNumOperands(); op++)
+			{
+				if (I->getOpcode() != ARM::CONSTPOOL_ENTRY
+					&& I->getOperand(op).isCPI()
+					&& ((unsigned)I->getOperand(op).getIndex() == idx))
+				{
+					MachineInstr *CPEMI = MF->CreateMachineInstr(TII->get(ARM::CONSTPOOL_ENTRY), DebugLoc());
+                                        MBBI->push_back(CPEMI);
+                                        MachineInstrBuilder(*MF, CPEMI).addImm(idx).addConstantPoolIndex(idx).addImm(size);
+					bb_has_cp_idx = true;
+					break;
+				}
+			}
+
+		}
+	}
+}
+
+
+void ARMConstantIslands::doMyPlacement()
+{
+	MachineFunction::iterator MFI = MF->end();
+	MachineBasicBlock *MBB = --MFI;
+	MF->erase(MBB);
+	//MF->DeleteMachineBasicBlock(MBB);
+
+	const std::vector<MachineConstantPoolEntry> &CPs = MCP->getConstants();
+	const DataLayout &TD = *MF->getTarget().getDataLayout();
+	for (unsigned i = 0, e = CPs.size(); i != e; ++i) 
+	{
+		unsigned size = TD.getTypeAllocSize(CPs[i].getType());
+		unsigned align = Log2_32(CPs[i].getAlignment());
+		addOneCPE(i, size, align);	
+	}
+
+
+}
+
+/********************************************************************************/
+void ARMConstantIslands::insertJump()
 {
 	for (MachineFunction::iterator MBBI = MF->begin(); MBBI != MF->end(); MBBI++)
 	{
