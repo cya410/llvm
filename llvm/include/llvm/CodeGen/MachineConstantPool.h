@@ -157,7 +157,7 @@ public:
   /// the object.
   unsigned getConstantPoolIndex(const Constant *C, unsigned Alignment);
   unsigned getConstantPoolIndex(MachineConstantPoolValue *V,unsigned Alignment);
-  
+ 
   /// isEmpty - Return true if this constant pool contains no constants.
   bool isEmpty() const { return Constants.empty(); }
 
