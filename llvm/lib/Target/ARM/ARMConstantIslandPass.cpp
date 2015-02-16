@@ -430,6 +430,13 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
 	if (!MCP->isEmpty())
 		doInitialPlacement(CPEMIs);
 
+	/*************************************************/
+	insertJump();
+	if (!MCP->isEmpty())
+		doMyPlacement();
+	return MadeChange;
+	/*************************************************/
+
 	/// The next UID to take is the first unused one.
 	AFI->initPICLabelUId(CPEMIs.size());
 
@@ -439,7 +446,6 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
 	initializeFunctionInfo(CPEMIs);
 	CPEMIs.clear();
 	DEBUG(dumpBBs());
-
 
 	/// Remove dead constant pool entries.
 	MadeChange |= removeUnusedCPEntries();
@@ -504,10 +510,9 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
 	T2JumpTables.clear();
 
 	/*************************************************/
-	insertJump();
-
-	if (!MCP->isEmpty())
-		doMyPlacement();
+	//insertJump();
+	//if (!MCP->isEmpty())
+	//	doMyPlacement();
 	/*************************************************/
 
 	dbgs() << "end of constant island on function " << MF << "\n";
@@ -533,17 +538,23 @@ void ARMConstantIslands::addOneCPE(unsigned idx, unsigned size, unsigned align)
 					&& I->getOperand(op).isCPI()
 					&& ((unsigned)I->getOperand(op).getIndex() == idx))
 				{
+					unsigned ID = AFI->createPICLabelUId();
+
 					MachineInstr *CPEMI = MF->CreateMachineInstr(TII->get(ARM::CONSTPOOL_ENTRY), DebugLoc());
                                         MBBI->push_back(CPEMI);
-                                        MachineInstrBuilder(*MF, CPEMI).addImm(idx).addConstantPoolIndex(idx).addImm(size);
+                                        MachineInstrBuilder(*MF, CPEMI).addImm(ID).addConstantPoolIndex(idx).addImm(size);
+                                        //MachineInstrBuilder(*MF, CPEMI).addImm(idx).addConstantPoolIndex(idx).addImm(size);
 					bb_has_cp_idx = true;
+
+
+					I->getOperand(op).setIndex(ID);
+
 					break;
 				}
 			}
 		}
 	}
 }
-
 
 void ARMConstantIslands::doMyPlacement()
 {
