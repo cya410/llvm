@@ -304,7 +304,7 @@ namespace {
 	}
 
 	void MCAsmStreamer::EmitLabel(MCSymbol *Symbol) {
-		assert(Symbol->isUndefined() && "Cannot define a symbol twice!");
+		//assert(Symbol->isUndefined() && "Cannot define a symbol twice!");
 		MCStreamer::EmitLabel(Symbol);
 
 		OS << *Symbol << MAI->getLabelSuffix();

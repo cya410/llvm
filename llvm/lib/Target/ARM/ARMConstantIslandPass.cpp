@@ -272,14 +272,16 @@ namespace {
 		const char *getPassName() const override {
 			return "ARM constant island placement and branch shortening pass";
 		}
-
-		private:
-		void doInitialPlacement(std::vector<MachineInstr*> &CPEMIs);
+			
 		/****************************************************/
+		unsigned LabelID = 0;
 		void insertJump();
 		void doMyPlacement();
 		void addOneCPE(unsigned idx, unsigned size, unsigned align);
 		/****************************************************/
+
+		private:
+		void doInitialPlacement(std::vector<MachineInstr*> &CPEMIs);
 		bool BBHasFallthrough(MachineBasicBlock *MBB);
 		CPEntry *findConstPoolEntry(unsigned CPI, const MachineInstr *CPEMI);
 		unsigned getCPELogAlign(const MachineInstr *CPEMI);
@@ -509,20 +511,15 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
 	PushPopMIs.clear();
 	T2JumpTables.clear();
 
-	/*************************************************/
-	//insertJump();
-	//if (!MCP->isEmpty())
-	//	doMyPlacement();
-	/*************************************************/
-
-	dbgs() << "end of constant island on function " << MF << "\n";
-
 	return MadeChange;
 }
 
 /********************************************************************************/
 void ARMConstantIslands::addOneCPE(unsigned idx, unsigned size, unsigned align)
 {
+	while (LabelID < MCP->getConstants().size()-1)
+		LabelID = AFI->createPICLabelUId();
+
 	for (MachineFunction::iterator MBBI = MF->begin(); MBBI != MF->end(); MBBI++)
 	{
 		bool bb_has_cp_idx = false;
@@ -538,17 +535,13 @@ void ARMConstantIslands::addOneCPE(unsigned idx, unsigned size, unsigned align)
 					&& I->getOperand(op).isCPI()
 					&& ((unsigned)I->getOperand(op).getIndex() == idx))
 				{
-					unsigned ID = AFI->createPICLabelUId();
+					LabelID = AFI->createPICLabelUId();
 
 					MachineInstr *CPEMI = MF->CreateMachineInstr(TII->get(ARM::CONSTPOOL_ENTRY), DebugLoc());
                                         MBBI->push_back(CPEMI);
-                                        MachineInstrBuilder(*MF, CPEMI).addImm(ID).addConstantPoolIndex(idx).addImm(size);
-                                        //MachineInstrBuilder(*MF, CPEMI).addImm(idx).addConstantPoolIndex(idx).addImm(size);
+                                        MachineInstrBuilder(*MF, CPEMI).addImm(LabelID).addConstantPoolIndex(idx).addImm(size);
 					bb_has_cp_idx = true;
-
-
-					I->getOperand(op).setIndex(ID);
-
+					I->getOperand(op).setIndex(LabelID);
 					break;
 				}
 			}
