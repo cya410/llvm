@@ -275,6 +275,7 @@ namespace {
 			
 		/****************************************************/
 		unsigned LabelID = 0;
+		void breakBasicBlock();
 		void insertJump();
 		void doMyPlacement();
 		void addOneCPE(unsigned idx, unsigned size, unsigned align);
@@ -382,7 +383,8 @@ FunctionPass *llvm::createARMConstantIslandPass() {
 	return new ARMConstantIslands();
 }
 
-bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
+bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) 
+{
 	MF = &mf;
 	MCP = mf.getConstantPool();
 
@@ -434,6 +436,7 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
 
 	/*************************************************/
 	insertJump();
+	breakBasicBlock();
 	if (!MCP->isEmpty())
 		doMyPlacement();
 	return MadeChange;
@@ -512,6 +515,31 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
 	T2JumpTables.clear();
 
 	return MadeChange;
+}
+
+/********************************************************************************/
+#include<fstream>
+
+void ARMConstantIslands::breakBasicBlock()
+{
+	std::ifstream infile("/home/yanchao/developing/tests/relocation/_config.txt");
+	unsigned t_size, c_size;
+	infile >> t_size >> c_size;	
+
+	BBInfo.clear();
+        BBInfo.resize(MF->getNumBlockIDs());
+
+	for (MachineFunction::iterator MBBI = MF->begin(); MBBI != MF->end(); MBBI++)
+	{	
+		computeBlockSize(MBBI);
+		
+		if (BBInfo[MBBI->getNumber()].Size > t_size * 4)
+		{
+			MachineBasicBlock::iterator I = MBBI->begin();
+			std::advance(I, c_size);
+			splitBlockBeforeInstr(I);
+		}
+	}
 }
 
 /********************************************************************************/
@@ -721,8 +749,8 @@ void ARMConstantIslands::scanFunctionJumpTables() {
 /// initializeFunctionInfo - Do the initial scan of the function, building up
 /// information about the sizes of each block, the location of all the water,
 /// and finding all of the constant pool users.
-void ARMConstantIslands::
-initializeFunctionInfo(const std::vector<MachineInstr*> &CPEMIs) {
+void ARMConstantIslands::initializeFunctionInfo(const std::vector<MachineInstr*> &CPEMIs) 
+{
 	BBInfo.clear();
 	BBInfo.resize(MF->getNumBlockIDs());
 
@@ -960,13 +988,14 @@ void ARMConstantIslands::updateForInsertedWaterBlock(MachineBasicBlock *NewBB) {
 /// Split the basic block containing MI into two blocks, which are joined by
 /// an unconditional branch.  Update data structures and renumber blocks to
 /// account for this change and returns the newly created block.
-MachineBasicBlock *ARMConstantIslands::splitBlockBeforeInstr(MachineInstr *MI) {
+MachineBasicBlock *ARMConstantIslands::splitBlockBeforeInstr(MachineInstr *MI) 
+{
 	MachineBasicBlock *OrigBB = MI->getParent();
 
 	// Create a new MBB for the code after the OrigBB.
-	MachineBasicBlock *NewBB =
-		MF->CreateMachineBasicBlock(OrigBB->getBasicBlock());
-	MachineFunction::iterator MBBI = OrigBB; ++MBBI;
+	MachineBasicBlock *NewBB = MF->CreateMachineBasicBlock(OrigBB->getBasicBlock());
+	MachineFunction::iterator MBBI = OrigBB; 
+	++MBBI;
 	MF->insert(MBBI, NewBB);
 
 	// Splice the instructions starting with MI over to NewBB.
@@ -1003,9 +1032,13 @@ MachineBasicBlock *ARMConstantIslands::splitBlockBeforeInstr(MachineInstr *MI) {
 	// available water after it (but not if it's already there, which happens
 	// when splitting before a conditional branch that is followed by an
 	// unconditional branch - in that case we want to insert NewBB).
+/*
 	water_iterator IP =
 		std::lower_bound(WaterList.begin(), WaterList.end(), OrigBB,
 				CompareMBBNumbers);
+
+	dbgs() << "reach this far ?" << "\n";
+
 	MachineBasicBlock* WaterBB = *IP;
 	if (WaterBB == OrigBB)
 		WaterList.insert(std::next(IP), NewBB);
@@ -1013,6 +1046,8 @@ MachineBasicBlock *ARMConstantIslands::splitBlockBeforeInstr(MachineInstr *MI) {
 		WaterList.insert(IP, OrigBB);
 	NewWaterList.insert(OrigBB);
 
+	dbgs() << "reach this far ??" << "\n";
+*/
 	// Figure out how large the OrigBB is.  As the first half of the original
 	// block, it cannot contain a tablejump.  The size includes
 	// the new jump we added.  (It should be possible to do this without
