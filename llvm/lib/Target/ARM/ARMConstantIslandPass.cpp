@@ -272,7 +272,7 @@ namespace {
 		const char *getPassName() const override {
 			return "ARM constant island placement and branch shortening pass";
 		}
-			
+
 		/****************************************************/
 		unsigned LabelID = 0;
 		void breakBasicBlock();
@@ -385,6 +385,7 @@ FunctionPass *llvm::createARMConstantIslandPass() {
 
 bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) 
 {
+	//dbgs() << "***** function: "<< mf.getName() << " *****\n";		
 	MF = &mf;
 	MCP = mf.getConstantPool();
 
@@ -436,9 +437,12 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf)
 
 	/*************************************************/
 	insertJump();
+
 	breakBasicBlock();
+
 	if (!MCP->isEmpty())
 		doMyPlacement();
+
 	return MadeChange;
 	/*************************************************/
 
@@ -527,16 +531,20 @@ void ARMConstantIslands::breakBasicBlock()
 	infile >> t_size >> c_size;	
 
 	BBInfo.clear();
-        BBInfo.resize(MF->getNumBlockIDs());
+	BBInfo.resize(MF->getNumBlockIDs());
 
 	for (MachineFunction::iterator MBBI = MF->begin(); MBBI != MF->end(); MBBI++)
 	{	
-		computeBlockSize(MBBI);
-		
-		if (BBInfo[MBBI->getNumber()].Size > t_size * 4)
+		//computeBlockSize(MBBI);
+		//if (BBInfo[MBBI->getNumber()].Size > t_size * 4)
+		if (MBBI->size() > t_size)
 		{
 			MachineBasicBlock::iterator I = MBBI->begin();
+
+			//c_size < MBBI->size() ? std::advance(I, c_size) : 
+			//	std::advance(I, MBBI->size() -1);
 			std::advance(I, c_size);
+
 			splitBlockBeforeInstr(I);
 		}
 	}
@@ -560,14 +568,14 @@ void ARMConstantIslands::addOneCPE(unsigned idx, unsigned size, unsigned align)
 			for (unsigned op = 0; op != I->getNumOperands(); op++)
 			{
 				if (I->getOpcode() != ARM::CONSTPOOL_ENTRY
-					&& I->getOperand(op).isCPI()
-					&& ((unsigned)I->getOperand(op).getIndex() == idx))
+						&& I->getOperand(op).isCPI()
+						&& ((unsigned)I->getOperand(op).getIndex() == idx))
 				{
 					LabelID = AFI->createPICLabelUId();
 
 					MachineInstr *CPEMI = MF->CreateMachineInstr(TII->get(ARM::CONSTPOOL_ENTRY), DebugLoc());
-                                        MBBI->push_back(CPEMI);
-                                        MachineInstrBuilder(*MF, CPEMI).addImm(LabelID).addConstantPoolIndex(idx).addImm(size);
+					MBBI->push_back(CPEMI);
+					MachineInstrBuilder(*MF, CPEMI).addImm(LabelID).addConstantPoolIndex(idx).addImm(size);
 					bb_has_cp_idx = true;
 					I->getOperand(op).setIndex(LabelID);
 					break;
@@ -577,6 +585,7 @@ void ARMConstantIslands::addOneCPE(unsigned idx, unsigned size, unsigned align)
 	}
 }
 
+/********************************************************************************/
 void ARMConstantIslands::doMyPlacement()
 {
 	MachineFunction::iterator MFI = MF->end();
@@ -602,7 +611,7 @@ void ARMConstantIslands::insertJump()
 		MachineFunction::iterator I = MBBI;
 		MachineFunction::iterator E = MF->end();
 		MachineBasicBlock *NextBB = nullptr;
-		
+
 		if(++I != E)
 			NextBB = I;
 
@@ -994,8 +1003,10 @@ MachineBasicBlock *ARMConstantIslands::splitBlockBeforeInstr(MachineInstr *MI)
 
 	// Create a new MBB for the code after the OrigBB.
 	MachineBasicBlock *NewBB = MF->CreateMachineBasicBlock(OrigBB->getBasicBlock());
+
 	MachineFunction::iterator MBBI = OrigBB; 
 	++MBBI;
+
 	MF->insert(MBBI, NewBB);
 
 	// Splice the instructions starting with MI over to NewBB.
@@ -1028,26 +1039,25 @@ MachineBasicBlock *ARMConstantIslands::splitBlockBeforeInstr(MachineInstr *MI)
 	// renumbered) block numbers.
 	BBInfo.insert(BBInfo.begin() + NewBB->getNumber(), BasicBlockInfo());
 
+	//dbgs() << "finish renumber mbb!\n";
 	// Next, update WaterList.  Specifically, we need to add OrigMBB as having
 	// available water after it (but not if it's already there, which happens
 	// when splitting before a conditional branch that is followed by an
 	// unconditional branch - in that case we want to insert NewBB).
-/*
-	water_iterator IP =
-		std::lower_bound(WaterList.begin(), WaterList.end(), OrigBB,
-				CompareMBBNumbers);
+	/*
+	   water_iterator IP =
+	   std::lower_bound(WaterList.begin(), WaterList.end(), OrigBB,
+	   CompareMBBNumbers);
 
-	dbgs() << "reach this far ?" << "\n";
+	   dbgs() << "reach this far ?" << "\n";
 
-	MachineBasicBlock* WaterBB = *IP;
-	if (WaterBB == OrigBB)
-		WaterList.insert(std::next(IP), NewBB);
-	else
-		WaterList.insert(IP, OrigBB);
-	NewWaterList.insert(OrigBB);
-
-	dbgs() << "reach this far ??" << "\n";
-*/
+	   MachineBasicBlock* WaterBB = *IP;
+	   if (WaterBB == OrigBB)
+	   WaterList.insert(std::next(IP), NewBB);
+	   else
+	   WaterList.insert(IP, OrigBB);
+	   NewWaterList.insert(OrigBB);
+	 */
 	// Figure out how large the OrigBB is.  As the first half of the original
 	// block, it cannot contain a tablejump.  The size includes
 	// the new jump we added.  (It should be possible to do this without
