@@ -440,6 +440,7 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf)
 
 	breakBasicBlock();
 
+
 	if (!MCP->isEmpty())
 		doMyPlacement();
 
@@ -533,7 +534,12 @@ void ARMConstantIslands::breakBasicBlock()
 	BBInfo.clear();
 	BBInfo.resize(MF->getNumBlockIDs());
 
-	for (MachineFunction::iterator MBBI = MF->begin(); MBBI != MF->end(); MBBI++)
+	MachineFunction::iterator MFEnd = MF->end();
+        --MFEnd;
+
+	
+
+	for (MachineFunction::iterator MBBI = MF->begin(); MBBI != MFEnd; MBBI++)
 	{	
 		//computeBlockSize(MBBI);
 		//if (BBInfo[MBBI->getNumber()].Size > t_size * 4)
